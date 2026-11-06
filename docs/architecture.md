@@ -98,6 +98,20 @@ Pending calls are record-derived, so reopening an unanswered question needs no n
 
 **Plan:** `plan_init` parses a restricted Mermaid graph and validates its DAG structure. It writes/replaces the whole plan; it is intentionally re-callable, not mechanically author-once. Question node IDs validate against the current tree. Current/visited/upcoming statuses derive from tagged calls, not grades or explicit “done” writes. Presenting the plan and waiting for a natural learner reply is prompt doctrine, not a separate acceptance transaction.
 
+## 4a. Capstone sessions
+
+`kind: "capstone"` is a build-it session: the learner picks graph nodes (required), pitches a software project that uses them, builds it **outside the app**, and the capstone agent evaluates what they built. It has its own prompt directory (`src/agent/prompts/capstone/`, composing voice, accuracy and formatting from `shared/`), its own agent (`createCapstoneAgent`) and no extraction or graph writes, like practice.
+
+- **Evaluation is read-only.** The agent cannot run code or tests; verdicts come from reading files. The prompt requires it to say so.
+- `brief` records the accepted title, project directory and acceptance criteria (optionally tagged with proposition ids). One brief per session: it locks the criteria and directory. That the learner actually accepted it in chat is prompt doctrine, not a structural gate; the directory must exist, criterion ids must be unique slugs, and targets validate against the graph.
+- `read` / `ls` / `find` / `grep` are wrapped in `src/agent/tools/scoped-fs.ts`: confined to the accepted directory by realpath (so `..`, absolute paths and symlinks cannot escape) and refused until a brief exists. The root is read at call time, so they unlock in the same turn the brief is accepted.
+- `review` (checkpoint, any time) and `evaluate` (final; callable again on resubmission, the latest stands) must give one verdict (`met` / `partial` / `unmet`) with file evidence for **every** criterion. `evaluate` also carries observations and the gap report. There is no overall score.
+- `gap_report` is the no-pitch path and is refused once a brief exists.
+- **UI.** A "Capstone" toggle on the home composer, a sidebar button, a sidebar kind-filter option and a hammer badge on capstone rows. Starting one requires picked nodes: the pick pill reads "Pick at least one node to start a capstone" and send stays disabled until a node is picked (home and the `/chat/new?mode=capstone` draft). In-session the top bar shows a quiet Capstone chip instead of a phase chip, the coverage ring is hidden, and the composer is the ordinary one (no dock, no Next button).
+- **Cards** (`components/capstone-cards.tsx`, registered in `components/artifacts/index.ts`): `brief`, `review`, `evaluate` (criterion rows with met/partial/unmet chips and the evidence open; observations; gaps) and `gap_report`. Model-authored input is read only through the parse seam in `src/core/capstone-parts.ts`; a refused call falls back to the quiet tool-call card. The view seam (`projectView`) flags the newest evaluation that went through as `latest`.
+- **Seeded start.** Gaps render "Teach these" / "Practice these" buttons. Each creates a session whose title and auto-sent first message is `Revisit: <first four gap areas>` and whose `graphContext` is the gaps' tagged propositions that still exist in the graph (none tagged = a pickless start). Navigation goes through `SeedNavigationContext` (Chat provides the app router; the default is a plain page load).
+- The accepted brief is a fold over the transcript (`capstoneBriefOf` in `src/core/native-messages.ts`); there is no extra field on the chat record. The tools live in `src/agent/tools/capstone.ts`.
+
 ## 4. Conversational practice
 
 Practice uses the same chats store, admission, native turn runner, steering, usage and recovery as teaching. It is **not** the former partitioner → problem-generator → grader problem-set service: there are no current `/api/practice/sets` routes or separate practice store.
